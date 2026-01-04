@@ -15,69 +15,44 @@ export default async function handler(request) {
         const { productName, ingredientsText } = await request.json();
 
         if (!process.env.GROQ_API_KEY) {
-            throw new Error('Server misconfiguration: API Key missing');
+            throw new Error('Server Key Missing');
         }
 
-        const systemPrompt = `You are EcoLens AI, the world's most advanced sustainable shopping assistant.
-    Analyze the product and suggest better alternatives.
-    FORMAT (JSON Only):
+        const systemPrompt = `You are EcoLens AI. Analyze the product sustainability.
+    Return JSON ONLY:
     {
-      "score": number (0-10, 1 decimal),
-      "carbon_footprint": "X kg CO2e",
-      "carbon_comparison": "Equivalent to X miles driven",
-      "emotional_message": "Motivational message based on score",
+      "score": number (0-10),
+      "carbon_footprint": "string",
       "tags": [{"label": "string", "icon": "emoji"}],
       "certifications": ["string"],
-      "greener_alternatives": [
-        {
-          "name": "Product Name",
-          "analyzed_score": number (0-10),
-          "why": "Brief reason (max 12 words)",
-          "url": "https://site.com"
-        }
-      ],
-      "eco_brands": [
-        {
-          "name": "Brand Name",
-          "analyzed_score": number (0-10),
-          "why": "Why sustainable (max 12 words)",
-          "url": "https://brand.com"
-        }
-      ]
-    }
-    RULES:
-    1. Analysis: Calculate score (0-10). 
-    2. Emotional Messages: 0-5.0 (Red), 5.1-7.9 (Yellow), 8.0-10 (Green).
-    3. Category lock: Electronics with electronics, etc.
-    4. JSON ONLY.`;
-
-        const userPrompt = \`Product: \${productName}\\nDetails: \${ingredientsText}\`;
+      "greener_alternatives": [{"name": "string", "why": "string", "url": "string"}],
+      "eco_brands": [{"name": "string", "why": "string", "url": "string"}]
+    }`;
 
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': \`Bearer \${process.env.GROQ_API_KEY}\`,
+                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
             },
             body: JSON.stringify({
                 model: 'llama-3.1-8b-instant',
                 messages: [
                     { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt },
+                    { role: 'user', content: `Product: ${productName}. Details: ${ingredientsText}` },
                 ],
-                temperature: 0.3,
-                max_tokens: 1000,
+                temperature: 0.1,
                 response_format: { type: 'json_object' },
             }),
         });
 
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error?.message || 'Groq API Error');
+        if (!response.ok) throw new Error(data.error?.message || 'Groq Error');
 
         const content = data.choices[0].message.content;
-        
-        // Robust JSON extraction
-        const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);
+
+        // Safety JSON extraction
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
         const cleanJson = jsonMatch ? jsonMatch[0] : content;
 
         return new Response(cleanJson, {
